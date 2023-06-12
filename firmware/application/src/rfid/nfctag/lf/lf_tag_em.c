@@ -1,7 +1,6 @@
 #include <stdint.h>
 
 #include "lf_tag_em.h"
-#include "syssleep.h"
 #include "tag_emulation.h"
 #include "fds_util.h"
 #include "tag_persistence.h"
@@ -177,7 +176,6 @@ void timer_ce_handler(nrf_timer_event_t event_type, void* p_context) {
                     m_is_lf_emulating = false;
                     TAG_FIELD_LED_OFF()                                     // 确保关闭LF的场状态的指示灯
                     NRF_LPCOMP->INTENSET = LPCOMP_INTENCLR_CROSS_Msk | LPCOMP_INTENCLR_UP_Msk | LPCOMP_INTENCLR_DOWN_Msk | LPCOMP_INTENCLR_READY_Msk;
-                    sleep_timer_start(SLEEP_DELAY_MS_FIELD_125KHZ_LOST);    // 启动进入休眠的定时器
                     NRF_LOG_INFO("LF FIELD LOST");
                 }
             }
@@ -201,8 +199,6 @@ void timer_ce_handler(nrf_timer_event_t event_type, void* p_context) {
 static void lpcomp_event_handler(nrf_lpcomp_event_t event) {
     // 仅限于未启动低频模拟时，并且是上升沿事件才去启动模拟卡
     if (!m_is_lf_emulating && event == NRF_LPCOMP_EVENT_UP) {
-        // 关闭休眠延时
-        sleep_timer_stop();
         // 关闭比较器
         nrf_drv_lpcomp_disable();
 

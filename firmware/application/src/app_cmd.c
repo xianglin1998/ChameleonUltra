@@ -4,7 +4,6 @@
 #include "usb_main.h"
 #include "rfid_main.h"
 #include "ble_main.h"
-#include "syssleep.h"
 #include "tag_emulation.h"
 #include "hex_utils.h"
 #include "data_cmd.h"
@@ -20,6 +19,8 @@
 #include "nrf_log_default_backends.h"
 NRF_LOG_MODULE_REGISTER();
 
+
+extern uint8_t m_btn_click_record;
 
 
 data_frame_tx_t* cmd_processor_get_version(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
@@ -499,6 +500,45 @@ data_frame_tx_t* after_hf_reader_run(uint16_t cmd, uint16_t status, uint16_t len
 #endif
 
 /**
+ * @brief 检查按钮是否正常按下（仅仅需要检查按钮的按下记录）
+ * 
+ * @param cmd 
+ * @param status 
+ * @param length 
+ * @param data 
+ * @return data_frame_tx_t* 
+ */
+data_frame_tx_t* cmd_processor_check_btn_click_record(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    return data_frame_make(cmd, STATUS_DEVICE_SUCCESS, 1, &m_btn_click_record);
+}
+
+/**
+ * @brief 把所有的RGB亮起来，然后针对某个颜色进行显示
+ * 
+ * @param cmd 
+ * @param status 
+ * @param length 
+ * @param data 
+ * @return data_frame_tx_t* 
+ */
+data_frame_tx_t* cmd_processor_light_up_all_rgb(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    uint32_t* led_pins = hw_get_led_array();
+    if (length == 1) {
+        // 亮起指定颜色的灯
+        set_slot_light_color(data[0]);
+        // 打开所有的灯
+        for (int i = 0; i < RGB_LIST_NUM; i++) {
+            nrf_gpio_pin_set(led_pins[i]);
+        }
+        status = STATUS_DEVICE_SUCCESS;
+    } else {
+        status = STATUS_PAR_ERR;
+    }
+    return data_frame_make(cmd, status, 0, NULL);
+}
+
+
+/**
  * (cmd -> processor) function map, the map struct is:
  *       cmd code                               before process               cmd processor                                after process
  */
@@ -546,6 +586,10 @@ static cmd_data_map_t m_data_cmd_map[] = {
 
     {    DATA_CMD_SET_SLOT_TAG_NICK,            NULL,                        cmd_processor_set_slot_tag_nick_name,        NULL                   },
     {    DATA_CMD_GET_SLOT_TAG_NICK,            NULL,                        cmd_processor_get_slot_tag_nick_name,        NULL                   },
+
+    {    DATA_CMD_CHECK_BTN_CLICK_RECORD,       NULL,                        cmd_processor_check_btn_click_record,        NULL                   },
+    {    DATA_CMD_LIGHT_UP_ALL_RGB,             NULL,                        cmd_processor_light_up_all_rgb,              NULL                   },
+
 };
 
 

@@ -3,11 +3,11 @@
 
 // Default name
 #if defined(PROJECT_CHAMELEON_ULTRA)
-#define DEVICE_NAME_STR         "ChameleonUltra"
-#define DEVICE_NAME_STR_SHORT   "CU"
+#define DEVICE_NAME_STR         "CU_Test"
+#define DEVICE_NAME_STR_SHORT   "CUT"
 #elif defined(PROJECT_CHAMELEON_LITE)
-#define DEVICE_NAME_STR         "ChameleonLite"
-#define DEVICE_NAME_STR_SHORT   "CL"
+#define DEVICE_NAME_STR         "CL_TEST"
+#define DEVICE_NAME_STR_SHORT   "CLT"
 #else
 #error "Unknown device name?"
 #endif

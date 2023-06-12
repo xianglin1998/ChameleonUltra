@@ -15,7 +15,6 @@
 #include "app_timer.h"
 #include "app_util_platform.h"
 
-#include "syssleep.h"
 #include "ble_main.h"
 #include "dataframe.h"
 #include "hw_connect.h"
@@ -400,9 +399,7 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
 
     switch (p_ble_evt->header.evt_id)
     {
-        case BLE_GAP_EVT_CONNECTED:
-            sleep_timer_stop();
-        
+        case BLE_GAP_EVT_CONNECTED: 
             NRF_LOG_INFO("Connected");
             m_conn_handle = p_ble_evt->evt.gap_evt.conn_handle;
             err_code = nrf_ble_qwr_conn_handle_assign(&m_qwr, m_conn_handle);
@@ -411,8 +408,6 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
             break;
 
         case BLE_GAP_EVT_DISCONNECTED:
-            sleep_timer_start(SLEEP_DELAY_MS_BLE_DISCONNECTED);
-        
             NRF_LOG_INFO("Disconnected");
             // LED indication will be changed when advertising starts.
             m_conn_handle = BLE_CONN_HANDLE_INVALID;
@@ -592,9 +587,8 @@ void saadc_event_handler(nrf_drv_saadc_evt_t const * p_event)
 
         // check low battery level, if level == 0, we can try to shutdown.
         if (percentage_batt_lvl == 0) {
-            NRF_LOG_INFO("battery too low, try to shutdown...");
+            NRF_LOG_INFO("battery too low...");
             g_is_low_battery_shutdown = true;
-            sleep_timer_start(SLEEP_NO_BATTERY_SHUTDOWN);
         } else {
             g_is_low_battery_shutdown = false;
         }

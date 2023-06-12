@@ -13,7 +13,6 @@ NRF_LOG_MODULE_REGISTER();
 #include "nfc_mf1.h"
 
 #include "rfid_main.h"
-#include "syssleep.h"
 #include "tag_emulation.h"
 
 
@@ -588,8 +587,6 @@ void nfc_tag_14a_event_callback(nrfx_nfct_evt_t const *p_event) {
     // Select action to process.
     switch (p_event->evt_id) {
         case NRFX_NFCT_EVT_FIELD_DETECTED: {
-            sleep_timer_stop();
-
             g_is_tag_emulating = true;
             g_usb_led_marquee_enable = false;
 
@@ -614,8 +611,6 @@ void nfc_tag_14a_event_callback(nrfx_nfct_evt_t const *p_event) {
         }
         case NRFX_NFCT_EVT_FIELD_LOST: {
             g_is_tag_emulating = false;
-            sleep_timer_start(SLEEP_DELAY_MS_FIELD_NFC_LOST);
-            
             TAG_FIELD_LED_OFF()
             m_tag_state_14a = NFC_TAG_STATE_14A_IDLE;
 

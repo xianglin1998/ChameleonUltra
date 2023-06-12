@@ -31,7 +31,6 @@ NRF_LOG_MODULE_REGISTER();
 #include "fds_util.h"
 #include "hex_utils.h"
 #include "rfid_main.h"
-#include "syssleep.h"
 #include "tag_emulation.h"
 #include "usb_main.h"
 #include "rgb_marquee.h"
@@ -39,18 +38,7 @@ NRF_LOG_MODULE_REGISTER();
 
 // Defining soft timers
 APP_TIMER_DEF(m_button_check_timer); // Timer for button debounce
-static bool m_is_read_btn_press = false;
-static bool m_is_write_btn_press = false;
-
-// cpu reset reason
-static uint32_t m_reset_source;
-static uint32_t m_gpregret_val;
-
-#define GPREGRET_CLEAR_VALUE_DEFAULT (0xFFFFFFFFUL)
-#define RESET_ON_LF_FIELD_EXISTS_Msk (1UL)
-
-extern bool g_is_low_battery_shutdown;
-
+uint8_t m_btn_click_record = 0x00;
 
 /**@brief Function for assert macro callback.
  *
@@ -147,11 +135,11 @@ static void timer_button_event_handle(void *arg) {
     if (nrf_gpio_pin_read(pin) == 1) {
         if (pin == BUTTON_1) {
             NRF_LOG_INFO("BUTTON_LEFT");
-            m_is_read_btn_press = true;
+            m_btn_click_record |= 0x01;
         }
         if (pin == BUTTON_2) {
             NRF_LOG_INFO("BUTTON_RIGHT");
-            m_is_write_btn_press = true;
+            m_btn_click_record |= 0x02;
         }
     }
 }
@@ -181,7 +169,7 @@ static void button_init(void) {
 
 /**@brief The implementation function to enter deep hibernation
  */
-static void system_off_enter(void) {
+void system_off_enter(void) {
     ret_code_t ret;
 
     // Disable the HF NFC event first
@@ -189,9 +177,7 @@ static void system_off_enter(void) {
     // Then disable the LF LPCOMP event
     NRF_LPCOMP->INTENCLR = LPCOMP_INTENCLR_CROSS_Msk | LPCOMP_INTENCLR_UP_Msk | LPCOMP_INTENCLR_DOWN_Msk | LPCOMP_INTENCLR_READY_Msk;
 
-    // Save tag data
-    tag_emulation_save();
-
+    // ram保持需要打开，不然功耗有偏差
     // Configure RAM hibernation hold
     uint32_t ram8_retention = // RAM8 Each section has 32KB capacity
                               // POWER_RAM_POWER_S0RETENTION_On << POWER_RAM_POWER_S0RETENTION_Pos ;
@@ -203,40 +189,7 @@ static void system_off_enter(void) {
     ret = sd_power_ram_power_set(8, ram8_retention);
     APP_ERROR_CHECK(ret);
 
-    if (g_is_low_battery_shutdown) {
-        // Don't create too complex animations, just blink LED1 three times.
-        rgb_marquee_stop();
-        set_slot_light_color(0);
-        for (uint8_t i = 0; i <= 3; i++) {
-            nrf_gpio_pin_set(LED_1);
-            bsp_delay_ms(100);
-            nrf_gpio_pin_clear(LED_1);
-            bsp_delay_ms(100);
-        }
-    } else {
-        // close all led.
-        uint32_t* p_led_array = hw_get_led_array();
-        for (uint8_t i = 0; i < RGB_LIST_NUM; i++) {
-            nrf_gpio_pin_clear(p_led_array[i]);
-        }
-        uint8_t slot = tag_emulation_get_slot();
-        // Power off animation
-        uint8_t dir = slot > 3 ? 1 : 0;
-        uint8_t color = get_color_by_slot(slot);
-        if (m_reset_source & (NRF_POWER_RESETREAS_NFC_MASK | NRF_POWER_RESETREAS_LPCOMP_MASK)) {
-            if (m_reset_source & NRF_POWER_RESETREAS_NFC_MASK) {
-                color = 1;
-            } else {
-                color = 2;
-            }
-        }
-        ledblink5(color, slot, dir ? 7 : 0);
-        ledblink4(color, dir, 7, 99, 75);
-        ledblink4(color, !dir, 7, 75, 50);
-        ledblink4(color, dir, 7, 50, 25);
-        ledblink4(color, !dir, 7, 25, 0);
-        rgb_marquee_stop();
-    }
+    rgb_marquee_stop();
 
     // IOs that need to be configured as floating analog inputs ==> no pull-up or pull-down
     uint32_t gpio_cfg_default_nopull[] = {
@@ -285,18 +238,6 @@ static void system_off_enter(void) {
     // Turn off all soft timers
     app_timer_stop_all();
 
-    // 检查是否存在低频场，解决休眠时有非常强的场信号一直使比较器处于高电平输入状态从而无法产生上升沿而无法唤醒系统的问题。
-    if(lf_is_field_exists()) {
-        // 关闭比较器
-        nrf_drv_lpcomp_disable();
-        // 设置reset原因，重启后需要拿到此原因，避免误判唤醒源
-        sd_power_gpregret_clr(1, GPREGRET_CLEAR_VALUE_DEFAULT);
-        sd_power_gpregret_set(1, RESET_ON_LF_FIELD_EXISTS_Msk);
-        // 触发reset唤醒系统，重新启动模拟过程
-        nrf_pwr_mgmt_shutdown(NRF_PWR_MGMT_SHUTDOWN_RESET);
-        return;
-    };
-
     // Go to system-off mode (this function will not return; wakeup will cause a reset).
     // 注意，如果插着jlink或者开着debug，进入低功耗的函数可能会报错，
     // 开启调试时我们应当禁用低功耗状态值检测，或者干脆不进入低功耗
@@ -315,187 +256,6 @@ static void system_off_enter(void) {
         NRF_LOG_PROCESS();
 }
 
-/**
- *@brief :Detection of wake-up source
- */
-static void check_wakeup_src(void) {
-    sd_power_reset_reason_get(&m_reset_source);
-    sd_power_reset_reason_clr(m_reset_source);
-
-    sd_power_gpregret_get(1, &m_gpregret_val);
-    sd_power_gpregret_clr(1, GPREGRET_CLEAR_VALUE_DEFAULT);
-
-
-    /*
-     * Note: The hibernation described below is deep hibernation, stopping any non-wakeup source peripherals and stopping the CPU to achieve the lowest power consumption
-     *
-     * If the wake-up source is a button, then you need to turn on BLE broadcast until the button stops clicking after a period of time to hibernate
-     * If the wake-up source is the field of the analog card, it is not necessary to turn on BLE broadcast until the analog card ends and then hibernate.
-     * If the wake-up source is USB, then keep BLE on and no hibernation until USB is unplugged
-     * If the wakeup source is the first time to access the battery, then do nothing and go directly to hibernation
-     *
-     * Hint: The above; logic is the logic processed in the wake-up phase, the rest of the logic is converted to the runtime processing phase
-     */
-
-    uint8_t slot = tag_emulation_get_slot();
-    uint8_t dir = slot > 3 ? 1 : 0;
-    uint8_t color = get_color_by_slot(slot);
-    
-    if (m_reset_source & NRF_POWER_RESETREAS_OFF_MASK) {
-        NRF_LOG_INFO("WakeUp from button");
-        advertising_start(); // Turn on Bluetooth radio
-
-        // Button wake-up boot animation
-        ledblink2(color, !dir, 11);
-        ledblink2(color, dir, 11);
-        ledblink2(color, !dir, dir ? slot : 7 - slot);
-        // The indicator of the current card slot lights up at the end of the animation
-        light_up_by_slot();
-
-        // If no operation follows, wait for the timeout and then deep hibernate
-        sleep_timer_start(SLEEP_DELAY_MS_BUTTON_WAKEUP);
-    } else if ((m_reset_source & (NRF_POWER_RESETREAS_NFC_MASK | NRF_POWER_RESETREAS_LPCOMP_MASK)) ||
-               (m_gpregret_val & RESET_ON_LF_FIELD_EXISTS_Msk)) {
-        NRF_LOG_INFO("WakeUp from rfid field");
-
-        // wake up from hf field.
-        if (m_reset_source & NRF_POWER_RESETREAS_NFC_MASK) {
-            color = 1;  // HF field show G.
-            NRF_LOG_INFO("WakeUp from HF");
-        } else {
-            color = 2;  // LF filed show B.
-            if (m_gpregret_val & RESET_ON_LF_FIELD_EXISTS_Msk) {
-                NRF_LOG_INFO("Reset by LF");
-            } else {
-                NRF_LOG_INFO("WakeUp from LF");
-            }
-        }
-
-        // 当前是模拟卡事件唤醒系统，我们可以让场强灯先亮起来
-        TAG_FIELD_LED_ON();
-
-        // In the case of field wake-up, only one round of RGB is swept as the power-on animation
-        ledblink2(color, !dir, dir ? slot : 7 - slot);
-        set_slot_light_color(color);
-        light_up_by_slot();
-
-        // We can only run tag emulation at field wakeup source.
-        sleep_timer_start(SLEEP_DELAY_MS_FIELD_WAKEUP);
-    } else if (m_reset_source & NRF_POWER_RESETREAS_VBUS_MASK) {
-        // nrfx_power_usbstatus_get() can check usb attach status
-        NRF_LOG_INFO("WakeUp from VBUS(USB)");
-        
-        // USB plugged in and open communication break has its own light effect, no need to light up for the time being
-        // set_slot_light_color(color);
-        // light_up_by_slot();
-
-        // Start Bluetooth radio with USB plugged in, no deep hibernation required
-        advertising_start();
-    } else {
-        NRF_LOG_INFO("First power system");
-
-        // Reset the noinit ram area
-        uint32_t *noinit_addr = (uint32_t *)0x20038000;
-        memset(noinit_addr, 0xFF, 0x8000);
-        NRF_LOG_INFO("Reset noinit ram done.");
-
-        // Initialize the default card slot data.
-        tag_emulation_factory_init();
-
-        // RGB
-        ledblink2(0, !dir, 11);
-        ledblink2(1, dir, 11);
-        ledblink2(2, !dir, 11);
-
-        // Show RGB for slot.
-        set_slot_light_color(color);
-        light_up_by_slot();
-
-        // If the USB is plugged in when first powered up, we can do something accordingly
-        if (nrfx_power_usbstatus_get() != NRFX_POWER_USB_STATE_DISCONNECTED) {
-            NRF_LOG_INFO("USB Power found.");
-            // usb plugged in can broadcast BLE at will
-            advertising_start();
-        } else {
-            sleep_timer_start(SLEEP_DELAY_MS_FRIST_POWER); // Wait a while and go straight to hibernation, do nothing
-        }
-    }
-}
-
-/**@brief button press event process
- */
-extern bool g_usb_led_marquee_enable;
-static void button_press_process(void) {
-    // Make sure that one of the AB buttons has a click event
-    if (m_is_read_btn_press || m_is_write_btn_press) {
-        // In any case, a button event occurs and we need to get the currently active card slot first
-        uint8_t slot_now = tag_emulation_get_slot();
-        uint8_t slot_new = slot_now;
-        // Handle the events of a button
-        if (m_is_read_btn_press) {
-            // Button left press
-            m_is_read_btn_press = false;
-            slot_new = tag_emulation_slot_find_prev(slot_now);
-        }
-        if (m_is_write_btn_press) {
-            // Button right press
-            m_is_write_btn_press = false;
-            slot_new = tag_emulation_slot_find_next(slot_now);
-        }
-        // Update status only if the new card slot switch is valid
-        if (slot_new != slot_now) {
-            tag_emulation_change_slot(slot_new, true); // Tell the analog card module that we need to switch card slots
-            g_usb_led_marquee_enable = false;
-            // Go back to the color corresponding to the field enablement type
-            uint8_t color_now = get_color_by_slot(slot_now);
-            uint8_t color_new = get_color_by_slot(slot_new);
-            
-            // Switching the light effect of the card slot
-            ledblink3(slot_now, color_now, slot_new, color_new);
-            // Switched the card slot, we need to re-light
-            light_up_by_slot();
-            // Then switch the color of the light again
-            set_slot_light_color(color_new);
-        }
-        // Re-delay into hibernation
-        sleep_timer_start(SLEEP_DELAY_MS_BUTTON_CLICK);
-    }
-}
-
-extern bool g_usb_port_opened;
-static void blink_usb_led_status(void) {
-    uint8_t slot = tag_emulation_get_slot();
-    uint8_t color = get_color_by_slot(slot);
-    uint8_t dir = slot > 3 ? 1 : 0;
-    static bool is_working = false;
-    if (nrfx_power_usbstatus_get() == NRFX_POWER_USB_STATE_DISCONNECTED) {
-        if (is_working) {
-            rgb_marquee_stop();
-            set_slot_light_color(color);
-            light_up_by_slot();
-            is_working = false;
-        }
-    } else {
-
-        // The light effect is enabled and can be displayed
-        if (is_rgb_marquee_enable()) {
-            is_working = true;
-            if (g_usb_port_opened) {
-                ledblink1(color, dir);
-            } else {
-                ledblink6();
-            }
-        } else {
-            if (is_working) {
-                is_working = false;
-                rgb_marquee_stop();
-                set_slot_light_color(color);
-                light_up_by_slot();
-            }
-        }
-    }
-}
-
 /**@brief Application main function.
  */
 int main(void) {
@@ -509,7 +269,6 @@ int main(void) {
     bsp_timer_init();         // Initialize timeout timer
     bsp_timer_start();        // Start BSP TIMER and prepare it for processing business logic
     button_init();            // Button initialization for handling business logic
-    sleep_timer_init();       // Soft timer initialization for hibernation
     rng_drv_and_srand_init(); // Random number generator initialization
     power_management_init();  // Power management initialization
     usb_cdc_init();           // USB cdc emulation initialization
@@ -519,8 +278,11 @@ int main(void) {
 
     // cmd callback register
     on_data_frame_complete(on_data_frame_received);
+
+    set_slot_light_color(2);
+    light_up_by_slot();
+    advertising_start();
     
-    check_wakeup_src();       // Detect wake-up source and decide BLE broadcast and subsequent hibernation action according to the wake-up source
     tag_mode_enter();         // Enter card simulation mode by default
 
     // usbd event listener
@@ -529,19 +291,11 @@ int main(void) {
     // Enter main loop.
     NRF_LOG_INFO("Chameleon working");
     while (1) {
-        // Button event process
-        button_press_process();
-        // Led blink at usb status
-        blink_usb_led_status();
         // Data pack process
         data_frame_process();
         // Log print process
         while (NRF_LOG_PROCESS());
         // USB event process
         while (app_usbd_event_queue_process());
-        // No task to process, system sleep enter.
-        // If system idle sometime, we can enter deep sleep state.
-        // Some task process done, we can enter cpu sleep state.
-        sleep_system_run(system_off_enter, nrf_pwr_mgmt_run);
     }
 }

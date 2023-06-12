@@ -1,4 +1,6 @@
 import enum
+import time
+from typing import Union
 
 import chameleon_com
 import chameleon_status
@@ -18,6 +20,9 @@ DATA_CMD_SLOT_DATA_CONFIG_SAVE = 1009
 
 DATA_CMD_ENTER_BOOTLOADER = 1010
 DATA_CMD_GET_DEVICE_CHIP_ID = 1011
+
+DATA_CMD_CHECK_BTN_CLICK_RECORD = 1012
+DATA_CMD_LIGHT_UP_ALL_RGB = 1013
 
 DATA_CMD_SCAN_14A_TAG = 2000
 DATA_CMD_MF1_SUPPORT_DETECT = 2001
@@ -93,15 +98,13 @@ class BaseChameleonCMD:
         """
         resp = self.device.send_cmd_sync(DATA_CMD_GET_APP_VERSION, 0x00, None)
         return int.from_bytes(resp.data, 'little')
-    
+
     def get_device_chip_id(self) -> str:
         """
             Get device chip id
         """
         resp = self.device.send_cmd_sync(DATA_CMD_GET_DEVICE_CHIP_ID, 0x00, None)
         return resp.data.hex()
-    
-    
 
     def is_reader_device_mode(self) -> bool:
         """
@@ -378,7 +381,7 @@ class BaseChameleonCMD:
         data.extend(atqa)
         data.extend(uid)
         return self.device.send_cmd_sync(DATA_CMD_SET_MF1_ANTI_COLLISION_RES, 0X00, data)
-    
+
     def set_slot_tag_nick_name(self, slot: int, sense_type: int, name: str):
         """
             设置MF1的模拟卡的防冲撞资源信息
@@ -391,7 +394,7 @@ class BaseChameleonCMD:
         data.extend([slot, sense_type])
         data.extend(name.encode(encoding="gbk"))
         return self.device.send_cmd_sync(DATA_CMD_SET_SLOT_TAG_NICK, 0x00, data)
-    
+
     def get_slot_tag_nick_name(self, slot: int, sense_type: int):
         """
             设置MF1的模拟卡的防冲撞资源信息
@@ -403,7 +406,7 @@ class BaseChameleonCMD:
         data = bytearray()
         data.extend([slot, sense_type])
         return self.device.send_cmd_sync(DATA_CMD_GET_SLOT_TAG_NICK, 0x00, data)
-    
+
     def update_slot_data_config(self):
         """
             更新卡槽的配置和数据到flash中。
@@ -417,6 +420,21 @@ class BaseChameleonCMD:
         :return:
         """
         return self.device.send_cmd_auto(DATA_CMD_ENTER_BOOTLOADER, 0x00, None)
+
+    def check_btn_click_record(self):
+        """
+            获得按钮点击记录
+        """
+        resp = self.device.send_cmd_sync(DATA_CMD_CHECK_BTN_CLICK_RECORD, 0x00, None)
+        return resp.data[0]
+
+    def light_up_all_rgb(self, rgb: int = 1 or 2 or 3):
+        """
+            点亮所有的RGB灯珠, 根据指定的颜色
+        """
+        data = bytearray()
+        data.extend([rgb])
+        return self.device.send_cmd_sync(DATA_CMD_LIGHT_UP_ALL_RGB, 0x00, data)
 
 
 class NegativeResponseError(Exception):
@@ -541,12 +559,12 @@ class PositiveChameleonCMD(BaseChameleonCMD):
         ret = super(PositiveChameleonCMD, self).set_mf1_anti_collision_res(sak, atqa, uid)
         self.check_status(ret.status, chameleon_status.Device.STATUS_DEVICE_SUCCESS)
         return ret
-    
+
     def set_slot_tag_nick_name(self, slot: int, sense_type: int, name: str):
         ret = super(PositiveChameleonCMD, self).set_slot_tag_nick_name(slot, sense_type, name)
         self.check_status(ret.status, chameleon_status.Device.STATUS_DEVICE_SUCCESS)
         return ret
-    
+
     def get_slot_tag_nick_name(self, slot: int, sense_type: int):
         ret = super(PositiveChameleonCMD, self).get_slot_tag_nick_name(slot, sense_type)
         self.check_status(ret.status, chameleon_status.Device.STATUS_DEVICE_SUCCESS)
@@ -563,9 +581,25 @@ if __name__ == '__main__':
     id = cml.get_device_chip_id()
     print(f"Device chip id: {id}")
 
+    for i in range(4):
+        cml.light_up_all_rgb(i)
+        time.sleep(2)
+    
+    # 关闭灯光的显示
+    cml.light_up_all_rgb(3)
+    print(f"RGB切换显示完成")
+
+    while True:
+        btn_record = cml.check_btn_click_record()
+        print(f"Button click record: {btn_record}")
+        if btn_record == 0x03:
+            print("按钮全部正常")
+            break
+        else:
+            time.sleep(0.2)
 
     # disconnect
     dev.close()
-    
+
     # nerver exit
     while True: pass

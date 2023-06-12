@@ -19,6 +19,8 @@
 #define DATA_CMD_SLOT_DATA_CONFIG_SAVE          (1009)
 #define DATA_CMD_ENTER_BOOTLOADER               (1010)
 #define DATA_CMD_GET_DEVICE_CHIP_ID             (1011)
+#define DATA_CMD_CHECK_BTN_CLICK_RECORD         (1012)
+#define DATA_CMD_LIGHT_UP_ALL_RGB               (1013)
 //
 // ******************************************************************
 
