@@ -3,8 +3,8 @@
 
 // Default name
 #if defined(PROJECT_CHAMELEON_ULTRA)
-#define DEVICE_NAME_STR         "CU_Test"
-#define DEVICE_NAME_STR_SHORT   "CUT"
+#define DEVICE_NAME_STR         "C_Tester"
+#define DEVICE_NAME_STR_SHORT   "CT"
 #elif defined(PROJECT_CHAMELEON_LITE)
 #define DEVICE_NAME_STR         "CL_TEST"
 #define DEVICE_NAME_STR_SHORT   "CLT"
