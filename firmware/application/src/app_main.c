@@ -281,7 +281,6 @@ int main(void) {
 
     set_slot_light_color(2);
     light_up_by_slot();
-    advertising_start();
     
     tag_mode_enter();         // Enter card simulation mode by default
 
