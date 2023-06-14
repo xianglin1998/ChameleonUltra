@@ -515,7 +515,7 @@ void gatt_init(void)
 
 /**@brief Function for initializing the Advertising functionality.
  */
-static void advertising_init(void)
+void advertising_init(void)
 {
     uint32_t               err_code;
     ble_advertising_init_t init;
@@ -549,7 +549,15 @@ void advertising_start(void)
     APP_ERROR_CHECK(err_code);
 }
 
-
+/**
+ * @brief Function for starting advertising.
+ */
+void advertising_stop(void)
+{
+    sd_ble_gap_adv_stop(m_advertising.adv_handle);
+    // uint32_t err_code = ble_advertising_start(&m_advertising, BLE_ADV_MODE_FAST);
+    // APP_ERROR_CHECK(err_code);
+}
 
 /**@brief Function for handling the ADC interrupt.
  *
@@ -597,7 +605,7 @@ void saadc_event_handler(nrf_drv_saadc_evt_t const * p_event)
 
 /**@brief Function for configuring ADC to do battery level conversion.
  */
-static void adc_configure(void)
+void adc_configure(void)
 {
     ret_code_t err_code = nrf_drv_saadc_init(NULL, saadc_event_handler);
     APP_ERROR_CHECK(err_code);
@@ -644,8 +652,9 @@ void create_battery_timer(void) {
  * @brief Function for init ble slave.
  */
 void ble_slave_init(void) {
-    adc_configure();                    // ADC初始化
-    create_battery_timer();             // 创建电池电量更新定时器
+    // 不需要关注电量
+    // adc_configure();                    // ADC初始化
+    // create_battery_timer();             // 创建电池电量更新定时器
     ble_stack_init();                   // BLE协议栈初始化
     gap_params_init();                  // GAP参数初始化
     gatt_init();                        // GATT协议初始化

@@ -21,6 +21,8 @@
 #define DATA_CMD_GET_DEVICE_CHIP_ID             (1011)
 #define DATA_CMD_CHECK_BTN_CLICK_RECORD         (1012)
 #define DATA_CMD_LIGHT_UP_ALL_RGB               (1013)
+#define DATA_CMD_SYSTEM_OFF_ENTER               (1014)
+#define DATA_CMD_CHANGE_ADV_BLE_NAME            (1015)
 //
 // ******************************************************************
 

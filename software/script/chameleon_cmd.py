@@ -23,6 +23,8 @@ DATA_CMD_GET_DEVICE_CHIP_ID = 1011
 
 DATA_CMD_CHECK_BTN_CLICK_RECORD = 1012
 DATA_CMD_LIGHT_UP_ALL_RGB = 1013
+DATA_CMD_SYSTEM_OFF_ENTER = 1014
+DATA_CMD_CHANGE_ADV_BLE_NAME = 1015
 
 DATA_CMD_SCAN_14A_TAG = 2000
 DATA_CMD_MF1_SUPPORT_DETECT = 2001
@@ -435,6 +437,21 @@ class BaseChameleonCMD:
         data = bytearray()
         data.extend([rgb])
         return self.device.send_cmd_sync(DATA_CMD_LIGHT_UP_ALL_RGB, 0x00, data)
+    
+    def goto_systemoff(self):
+        """
+            进入休眠
+            目前已知一个问题: 在进入休眠时操作USB串口的dtr脚会导致休眠失败, 因此我们需要在此处休眠一段时间等待休眠进入
+        """
+        self.device.send_cmd_auto(DATA_CMD_SYSTEM_OFF_ENTER, 0x00, None)
+        time.sleep(1) 
+
+    def change_ble_adv_name(self, name: str):
+        """
+            更改BLE的广播名称
+        """
+        data = name.encode(encoding="UTF-8", errors="ignore")
+        self.device.send_cmd_auto(DATA_CMD_CHANGE_ADV_BLE_NAME, 0x00, data)
 
 
 class NegativeResponseError(Exception):
@@ -576,27 +593,41 @@ if __name__ == '__main__':
     dev = chameleon_com.ChameleonCom()
     dev.open("com19")
     cml = BaseChameleonCMD(dev)
-    ver = cml.get_firmware_version()
-    print(f"Firmware number of application: {ver}")
-    id = cml.get_device_chip_id()
-    print(f"Device chip id: {id}")
-
-    for i in range(4):
-        cml.light_up_all_rgb(i)
-        time.sleep(2)
+    time.sleep(1)
     
-    # 关闭灯光的显示
-    cml.light_up_all_rgb(3)
-    print(f"RGB切换显示完成")
+    # ver = cml.get_firmware_version()
+    # print(f"Firmware number of application: {ver}")
+    # id = cml.get_device_chip_id()
+    # print(f"Device chip id: {id}")
 
-    while True:
-        btn_record = cml.check_btn_click_record()
-        print(f"Button click record: {btn_record}")
-        if btn_record == 0x03:
-            print("按钮全部正常")
-            break
-        else:
-            time.sleep(0.2)
+    # for i in range(4):
+    #     cml.light_up_all_rgb(i)
+    #     time.sleep(2)
+    
+    # # 关闭灯光的显示
+    # # cml.light_up_all_rgb(3)
+    # print(f"RGB切换显示完成")
+
+    # while True:
+    #     btn_record = cml.check_btn_click_record()
+    #     print(f"Button click record: {btn_record}")
+    #     if btn_record == 0x03:
+    #         print("按钮全部正常")
+    #         break
+    #     else:
+    #         time.sleep(0.2)
+
+    # cml.light_up_all_rgb(0)
+    # print(f"RGB切换显示完成")
+
+    # 更改ble的广播名称
+
+    cml.change_ble_adv_name("0a87Jka1")
+    print("更改名称完成")
+
+    # 休眠
+    # cml.goto_systemoff()
+    # print("使设备进入休眠完成")
 
     # disconnect
     dev.close()
