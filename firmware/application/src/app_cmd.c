@@ -541,6 +541,9 @@ data_frame_tx_t* cmd_processor_light_up_all_rgb(uint16_t cmd, uint16_t status, u
 // 主动进入系统休眠
 extern void system_off_enter(void);
 data_frame_tx_t* cmd_processor_systemoff_enter(uint16_t cmd, uint16_t status, uint16_t length, uint8_t *data) {
+    // 设置一个特殊的值到休眠保留的内存中
+    *(((uint32_t*)0x20038000)) = 1008612;
+    // 然后再去深度休眠
     system_off_enter();
     return NULL;
 }

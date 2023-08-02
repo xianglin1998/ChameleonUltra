@@ -259,6 +259,7 @@ void system_off_enter(void) {
 /**@brief Application main function.
  */
 int main(void) {
+
     hw_connect_init();        // Remember to initialize the pins first
     init_leds();              // LED initialization
 
@@ -275,6 +276,12 @@ int main(void) {
     ble_slave_init();         // Bluetooth protocol stack initialization
     tag_emulation_init();     // Analog card initialization
     rgb_marquee_init();       // Light effect initialization
+
+    // 如果开机的时候，发现主动休眠的，则继续进入休眠。不要唤醒
+    if (*(((uint32_t*)0x20038000)) == 1008612) {
+        *(((uint32_t*)0x20038000)) = 0;
+        system_off_enter();
+    }
 
     // cmd callback register
     on_data_frame_complete(on_data_frame_received);

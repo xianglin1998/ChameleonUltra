@@ -182,3 +182,10 @@ int fputc(int ch, FILE *f){
 bool is_usb_working(void) {
     return g_usb_port_opened;
 }
+
+void usb_cdc_uninit(void) {
+    app_usbd_disable();
+    app_usbd_stop();
+    while (nrf_drv_usbd_is_enabled());
+    app_usbd_uninit();
+}
